@@ -6,7 +6,7 @@ from dotenv import find_dotenv, load_dotenv
 from fastapi import FastAPI
 from pydantic import BaseModel
 from telegram import Update
-from telegram.ext import Application, CallbackContext, CommandHandler
+from telegram.ext import Application, CallbackContext, CommandHandler, ContextTypes
 from mongoengine import Document, connect, IntField, ListField
 
 dotenv_path = find_dotenv()
