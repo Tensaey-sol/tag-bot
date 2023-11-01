@@ -6,8 +6,8 @@ from dotenv import find_dotenv, load_dotenv
 from fastapi import FastAPI
 from pydantic import BaseModel
 from telegram import Update
-from telegram.ext import Application, CallbackContext, CommandHandler, ContextTypes, MessageHandler, filters
-from mongoengine import Document, connect, IntField, ListField, StringField, ReferenceField
+from telegram.ext import Application, CallbackContext, CommandHandler, ContextTypes
+from mongoengine import Document, connect, IntField, ListField
 
 dotenv_path = find_dotenv()
 load_dotenv(dotenv_path)
@@ -28,14 +28,6 @@ class ChatUser(Document):
     with_usernames = ListField()
     without_usernames = ListField()
 
-class User(Document):
-    user_id = IntField(unique=True, required=True)
-    first_name = StringField()
-
-# Define a MongoEngine document for Role
-class Role(Document):
-    name = StringField(unique=True, required=True)
-    members = ListField(ReferenceField(User))
 
 application = Application.builder().token(TOKEN).build()
 
@@ -160,169 +152,6 @@ async def tag_command(update: Update, context: CallbackContext):
         # Handle the case where user data doesn't exist.
         await update.message.reply_text('Chat user data not found.')
 
-async def create_role(update, context):
-    chat_admins = await update.effective_chat.get_administrators()
-
-    # Check if the user who sent the command is in the list of chat administrators
-    is_admin = update.effective_user in (admin.user for admin in chat_admins)
-
-    if is_admin:
-        if len(context.args) < 1:
-            await update.message.reply_text('Please provide a role name after the command. Example: /create_role myrole')
-            return
-
-        role_name = context.args[0]
-        if not Role.objects(name=role_name):
-            role = Role(name=role_name)
-            role.save()
-            await update.message.reply_text(f'Role {role_name} created.')
-        else:
-            await update.message.reply_text(f'Role {role_name} already exists.')
-    else:
-        await update.message.reply_text('You are not authorized to perform this action.')
-
-# Function to delete a role
-
-async def delete_role(update, context):
-    chat_admins = await update.effective_chat.get_administrators()
-
-    # Check if the user who sent the command is in the list of chat administrators
-    is_admin = update.effective_user in (admin.user for admin in chat_admins)
-
-    if is_admin:
-        if len(context.args) < 1:
-            await update.message.reply_text('Please provide the role name you want to delete. Example: /delete_role myrole')
-            return
-
-        role_name = context.args[0]
-        role = Role.objects(name=role_name).first()
-        if role:
-            role.delete()
-            await update.message.reply_text(f'Role {role_name} deleted.')
-        else:
-            await update.message.reply_text(f'Role {role_name} does not exist.')
-    else:
-        await update.message.reply_text('You are not authorized to perform this action.')
-
-# Function to add a user to a role
-
-async def add_user_to_role(update, context):
-    chat_admins = await update.effective_chat.get_administrators()
-
-    # Check if the user who sent the command is in the list of chat administrators
-    is_admin = update.effective_user in (admin.user for admin in chat_admins)
-
-    # Check if the message contains a role name
-    text = update.message.text
-    parts = text.split()
-    if len(parts) < 2:
-        await update.message.reply_text('Please reply to a user message and provide a role name. Example: /add_user myrole')
-        return
-
-    role_name = parts[1]
-    user_id = update.message.reply_to_message.from_user.id
-    user_first_name = update.message.reply_to_message.from_user.first_name  # Get the user's first name
-
-    # Check if the user sending the command is an admin
-    if is_admin:
-        role = Role.objects(name=role_name).first()
-        if role:
-            user = User.objects(user_id=int(user_id)).first()
-            if not user:
-                user = User(user_id=int(user_id), first_name=user_first_name)  # Store the first name
-                user.save()
-
-            if user not in role.members:
-                role.members.append(user)
-                role.save()
-                await update.message.reply_text(f'User {user_first_name} added to role {role_name}')  # Use the first name
-            else:
-                await update.message.reply_text(f'User {user_first_name} is already in role {role_name}')  # Use the first name
-        else:
-            await update.message.reply_text(f'Role {role_name} does not exist.')
-    else:
-        await update.message.reply_text('You are not authorized to perform this action.')
-
-# Function to remove a user from a role
-
-async def remove_user_from_role(update, context):
-    chat_admins = await update.effective_chat.get_administrators()
-
-    # Check if the user who sent the command is in the list of chat administrators
-    is_admin = update.effective_user in (admin.user for admin in chat_admins)
-
-    if is_admin:
-        # Check if the message is a reply to a user message
-        if update.message.reply_to_message and update.message.reply_to_message.from_user:
-            user_to_remove = update.message.reply_to_message.from_user
-
-            if len(context.args) < 1:
-                await update.message.reply_text('Please provide the role name. Example: /remove_user myrole')
-                return
-
-            role_name = context.args[0]
-            role = Role.objects(name=role_name).first()
-
-            if role:
-                user = User.objects(user_id=user_to_remove.id).first()
-
-                if user and user in role.members:
-                    # Remove the user from the role
-                    role.members.remove(user)
-                    role.save()
-
-                    await update.message.reply_text(f'User {user_to_remove.first_name} removed from role {role_name}.')
-                else:
-                    await update.message.reply_text(f'User {user_to_remove.first_name} is not in role {role_name}')
-            else:
-                await update.message.reply_text(f'Role {role_name} does not exist.')
-        else:
-            await update.message.reply_text('Please reply to a user message to remove them from the role.')
-    else:
-        await update.message.reply_text('You are not authorized to perform this action.')
-
-# Function to mention users in a role
-
-async def mention_role(update, context):
-    chat_admins = await update.effective_chat.get_administrators()
-    is_admin = update.effective_user in (admin.user for admin in chat_admins)
-
-    if is_admin:
-        if len(context.args) < 1:
-            await update.message.reply_text('Please provide the role name to mention. Example: /mention myrole')
-            return
-
-        role_name = context.args[0]
-        role = Role.objects(name=role_name).first()
-        if role:
-            if role.members:  # Check if the role has members
-                mentions = ', '.join([f"[{user.first_name}](tg://user?id={user.user_id})" for user in role.members])
-                await update.message.reply_text(f'Members of role {role_name}: {mentions}', parse_mode="MarkdownV2")
-            else:
-                await update.message.reply_text(f'Role {role_name} has no members to mention.')
-        else:
-            await update.message.reply_text(f'Role {role_name} does not exist.')
-    else:
-        await update.message.reply_text('You are not authorized to perform this action.')
-
-
-# Function to list all roles and their members
-async def all_roles(update, context):
-    roles = Role.objects()
-    if roles:
-        role_info = []
-        for role in roles:
-            member_names = []
-            for user_ref in role.members:
-                user = user_ref
-                if user and hasattr(user, "first_name"):
-                    member_names.append(user.first_name)
-            role_info.append(f"Role {role.name}: {', '.join(member_names)}")
-        response = '\n'.join(role_info)
-        await update.message.reply_text(response)
-    else:
-        await update.message.reply_text('No roles exist.')
-
 
 
 def register_application(application):
@@ -330,14 +159,6 @@ def register_application(application):
     application.add_handler(CommandHandler("in", in_command))
     application.add_handler(CommandHandler("out", out_command))
     application.add_handler(CommandHandler("everyone", tag_command))
-    application.add_handler(CommandHandler('create_role', create_role))
-    application.add_handler(CommandHandler('delete_role', delete_role))
-    application.add_handler(CommandHandler('add_user_to_role', add_user_to_role))
-    application.add_handler(CommandHandler('remove_user_from_role', remove_user_from_role))
-    application.add_handler(CommandHandler('mention_role', mention_role))
-    application.add_handler(CommandHandler('roles_info', all_roles))
-    application.add_handler(MessageHandler(filters.TEXT & filters.REPLY, add_user_to_role))
-    application.add_handler(MessageHandler(filters.TEXT & filters.REPLY, remove_user_from_role))
 
 
 @app.post("/webhook")
