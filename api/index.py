@@ -217,41 +217,39 @@ async def delete_role(update, context):
 # Function to add a user to a role
 async def add_user_to_role(update, context):
     chat_admins = await update.effective_chat.get_administrators()
-
-    # Check if the user who sent the command is in the list of chat administrators
     is_admin = update.effective_user in (admin.user for admin in chat_admins)
 
-    if context.args is not None and len(context.args) >= 1:
-        role_name = context.args[0]
+    if is_admin:
+        if context.args is not None and len(context.args) >= 1:
+            role_name = context.args[0]
 
-        # Check if the user has replied to a message
-        if update.message.reply_to_message:
-            user_id = update.message.reply_to_message.from_user.id
-            user_first_name = update.message.reply_to_message.from_user.first_name  # Get the user's first name
+            # Check if the user has mentioned another user
+            if update.message.reply_to_message and update.message.reply_to_message.from_user:
+                mentioned_user = update.message.reply_to_message.from_user
+                user_id = mentioned_user.id
+                user_first_name = mentioned_user.first_name
 
-            # Check if the user sending the command is an admin
-            if is_admin:
                 role = Role.objects(name=role_name).first()
                 if role:
-                    user = User.objects(user_id=int(user_id)).first()
+                    user = User.objects(user_id=user_id).first()
                     if not user:
-                        user = User(user_id=int(user_id), first_name=user_first_name)  # Store the first name
+                        user = User(user_id=user_id, first_name=user_first_name)
                         user.save()
 
                     if user not in role.members:
                         role.members.append(user)
                         role.save()
-                        await update.message.reply_text(f'User {user_first_name} added to role {role_name}')  # Use the first name
+                        await update.message.reply_text(f'User {user_first_name} added to role {role_name}')
                     else:
-                        await update.message.reply_text(f'User {user_first_name} is already in role {role_name}')  # Use the first name
+                        await update.message.reply_text(f'User {user_first_name} is already in role {role_name}')
                 else:
                     await update.message.reply_text(f'Role {role_name} does not exist.')
             else:
-                await update.message.reply_text('You are not authorized to perform this action.')
+                await update.message.reply_text('Please reply to a user to add them to a role.')
         else:
-            await update.message.reply_text('Please reply to a user to add them to a role.')
+            await update.message.reply_text('Please provide a role name as an argument. add_user_to_role <Role_name>')
     else:
-        await update.message.reply_text('Please provide a role name as an argument. add_user_to_role <Role_name> ')
+        await update.message.reply_text('You are not authorized to perform this action.')
 
 
 # Function to remove a user from a role
