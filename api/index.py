@@ -25,8 +25,7 @@ app = FastAPI()
 
 class ChatUser(Document):
     chat_id = IntField(primary_key=True)
-    with_usernames = ListField()
-    without_usernames = ListField()
+    users = ListField()
 
 class User(Document):
     user_id = IntField(unique=True, required=True)
@@ -78,7 +77,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     '\n /mention_role <Role_name> to mention users that has that role.'
                                     '\n /roles_info to list all available roles and their members.')
 
-
 async def in_command(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     user_id = update.message.from_user.id
@@ -87,26 +85,24 @@ async def in_command(update: Update, context: CallbackContext):
 
     chat_user = await check_user(chat_id)  # Await the asynchronous function
 
+    user_info = {'user_id': user_id, 'user_firstname': user_firstname}
+
     if username:
-        # User has a username, add to with_usernames list
-        if username in chat_user.with_usernames:
+        # User has a username, add to the users list
+        if any(user['user_id'] == user_id for user in chat_user.users):
             await update.message.reply_text("You are already in the list.")
         else:
-            chat_user.with_usernames.append(username)
+            chat_user.users.append(user_info)
             chat_user.save()
             await update.message.reply_text("You have agreed to be tagged.")
     else:
-        # User does not have a username, add to without_usernames list
-        if str(user_id) in chat_user.without_usernames:
+        # User does not have a username, add to the users list
+        if any(user['user_id'] == user_id for user in chat_user.users):
             await update.message.reply_text("You are already in the list.")
         else:
-            # Store user_id and user_firstname
-            user_info = {'user_id': user_id, 'user_firstname': user_firstname}
-            chat_user.without_usernames.append(user_info)
+            chat_user.users.append(user_info)
             chat_user.save()
             await update.message.reply_text("You have agreed to be tagged.")
-
-
 
 
 async def out_command(update: Update, context: CallbackContext):
@@ -114,18 +110,15 @@ async def out_command(update: Update, context: CallbackContext):
     user = update.message.from_user
     chat_id = update.message.chat_id
     user_id = user.id
-    username = user.username
 
     # Check if the user data exists
     chat_user = await check_user(chat_id)  # Await the asynchronous function
 
     if chat_user:
-        if username in chat_user.with_usernames:
-            chat_user.with_usernames.remove(username)
-            chat_user.save()
-            await update.message.reply_text('You have been removed from the tag list.')
-        elif any(user_id == user_info['user_id'] for user_info in chat_user.without_usernames):
-            chat_user.without_usernames = [user_info for user_info in chat_user.without_usernames if user_id != user_info['user_id']]
+        user_info = {'user_id': user_id, 'user_firstname': user.first_name}
+
+        if any(user_info == user_info for user_info in chat_user.users):
+            chat_user.users = [user_info for user_info in chat_user.users if user_info != user_info]
             chat_user.save()
             await update.message.reply_text('You have been removed from the tag list.')
         else:
@@ -143,28 +136,20 @@ async def tag_command(update: Update, context: CallbackContext):
     chat_user = await check_user(chat_id)  # Await the asynchronous function
 
     if chat_user:
-        if not chat_user.with_usernames and not chat_user.without_usernames:
+        if not chat_user.users:
             await update.message.reply_text('No users have agreed to be tagged yet.')
             return
 
         message = ' '.join(context.args)
 
-        # Mention users with usernames using "@" symbol
-        mentioned_users_with_usernames = [f"@{username}" for username in chat_user.with_usernames]
-
         # Mention users without usernames using Markdown format
-        mentioned_users_without_usernames = [
-            f"[{user['user_firstname']}](tg://user?id={user['user_id']})" for user in chat_user.without_usernames
+        mentioned_users = [
+            f"[{user['user_firstname']}](tg://user?id={user['user_id']})" for user in chat_user.users
         ]
 
-
-        if mentioned_users_with_usernames:
-            response_with_usernames = ' '.join(mentioned_users_with_usernames)
-            await update.message.reply_text(response_with_usernames)
-
-        if mentioned_users_without_usernames:
-            response_without_usernames = ' '.join(mentioned_users_without_usernames)
-            await update.message.reply_text(response_without_usernames, parse_mode="MarkdownV2")
+        if mentioned_users:
+            response_users = ' '.join(mentioned_users)
+            await update.message.reply_text(response_users, parse_mode="MarkdownV2")
     else:
         # Handle the case where user data doesn't exist.
         await update.message.reply_text('Chat user data not found.')
