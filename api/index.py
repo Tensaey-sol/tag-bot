@@ -34,6 +34,7 @@ class User(Document):
 # Define a MongoEngine document for Role
 class Role(Document):
     name = StringField(unique=True, required=True)
+    chat_id = IntField(required=True)
     members = ListField(ReferenceField(User))
 
 
@@ -164,20 +165,21 @@ async def create_role(update, context):
     if is_admin:
         if context.args is not None and len(context.args) > 0:
             role_name = context.args[0]
-            if not Role.objects(name=role_name):
-                role = Role(name=role_name)
+            chat_id = update.effective_chat.id
+
+            # Update the query to include chat_id
+            if not Role.objects(name=role_name, chat_id=chat_id):
+                role = Role(name=role_name, chat_id=chat_id)
                 role.save()
                 await update.message.reply_text(f'Role {role_name} created.')
             else:
-                await update.message.reply_text(f'Role {role_name} already exists.')
+                await update.message.reply_text(f'Role {role_name} already exists in this chat.')
         else:
             await update.message.reply_text('Please provide a role name as an argument. create_role <Role_name> ')
     else:
         await update.message.reply_text('You are not authorized to perform this action.')
 
-
 # Function to delete a role
-
 async def delete_role(update, context):
     chat_admins = await update.effective_chat.get_administrators()
 
@@ -187,17 +189,20 @@ async def delete_role(update, context):
     if is_admin:
         if context.args is not None and len(context.args) > 0:
             role_name = context.args[0]
-            role = Role.objects(name=role_name).first()
+            chat_id = update.effective_chat.id
+
+            # Update the query to include chat_id
+            role = Role.objects(name=role_name, chat_id=chat_id).first()
+
             if role:
                 role.delete()
                 await update.message.reply_text(f'Role {role_name} deleted.')
             else:
-                await update.message.reply_text(f'Role {role_name} does not exist.')
+                await update.message.reply_text(f'Role {role_name} does not exist in this chat.')
         else:
             await update.message.reply_text('Please provide a role name as an argument. delete_role <Role_name> ')
     else:
         await update.message.reply_text('You are not authorized to perform this action.')
-
 
 # Function to add a user to a role
 async def add_user_to_role(update, context):
@@ -216,7 +221,11 @@ async def add_user_to_role(update, context):
 
             # Check if the user sending the command is an admin
             if is_admin:
-                role = Role.objects(name=role_name).first()
+                chat_id = update.effective_chat.id
+
+                # Update the query to include chat_id
+                role = Role.objects(name=role_name, chat_id=chat_id).first()
+
                 if role:
                     user = User.objects(user_id=int(user_id)).first()
                     if not user:
@@ -230,7 +239,7 @@ async def add_user_to_role(update, context):
                     else:
                         await update.message.reply_text(f'User {user_first_name} is already in role {role_name}')  # Use the first name
                 else:
-                    await update.message.reply_text(f'Role {role_name} does not exist.')
+                    await update.message.reply_text(f'Role {role_name} does not exist in this chat.')
             else:
                 await update.message.reply_text('You are not authorized to perform this action.')
         else:
@@ -238,9 +247,7 @@ async def add_user_to_role(update, context):
     else:
         await update.message.reply_text('Please provide a role name as an argument. add_user_to_role <Role_name> ')
 
-
 # Function to remove a user from a role
-
 async def remove_user_from_role(update, context):
     chat_admins = await update.effective_chat.get_administrators()
 
@@ -254,7 +261,10 @@ async def remove_user_from_role(update, context):
 
             if context.args is not None and len(context.args) >= 1:
                 role_name = context.args[0]
-                role = Role.objects(name=role_name).first()
+                chat_id = update.effective_chat.id
+
+                # Update the query to include chat_id
+                role = Role.objects(name=role_name, chat_id=chat_id).first()
 
                 if role:
                     user = User.objects(user_id=user_to_remove.id).first()
@@ -268,7 +278,7 @@ async def remove_user_from_role(update, context):
                     else:
                         await update.message.reply_text(f'User {user_to_remove.first_name} is not in role {role_name}')
                 else:
-                    await update.message.reply_text(f'Role {role_name} does not exist.')
+                    await update.message.reply_text(f'Role {role_name} does not exist in this chat.')
             else:
                 await update.message.reply_text('Please provide a role name as an argument. remove_user_from_role <Role_name>')
         else:
@@ -282,7 +292,11 @@ async def remove_user_from_role(update, context):
 async def mention_role(update, context):
     if context.args is not None and len(context.args) > 0:
         role_name = context.args[0]
-        role = Role.objects(name=role_name).first()
+        chat_id = update.effective_chat.id
+
+        # Update the query to include chat_id
+        role = Role.objects(name=role_name, chat_id=chat_id).first()
+
         if role:
             if role.members:  # Check if the role has members
                 mentions = ', '.join([f"[{user.first_name}](tg://user?id={user.user_id})" for user in role.members])
@@ -290,7 +304,7 @@ async def mention_role(update, context):
             else:
                 await update.message.reply_text(f'Role {role_name} has no members to mention.')
         else:
-            await update.message.reply_text(f'Role {role_name} does not exist.')
+            await update.message.reply_text(f'Role {role_name} does not exist in this chat.')
     else:
         await update.message.reply_text('Please provide a role name as an argument. mention_role <Role_name>')
 
@@ -298,7 +312,9 @@ async def mention_role(update, context):
 
 # Function to list all roles and their members
 async def all_roles(update, context):
-    roles = Role.objects()
+    chat_id = update.effective_chat.id
+    roles = Role.objects(chat_id=chat_id)
+
     if roles:
         role_info = []
         for role in roles:
@@ -311,7 +327,8 @@ async def all_roles(update, context):
         response = '\n'.join(role_info)
         await update.message.reply_text(response)
     else:
-        await update.message.reply_text('No roles exist.')
+        await update.message.reply_text('No roles exist in this chat.')
+
 
 
 
