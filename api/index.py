@@ -1,5 +1,5 @@
 import json
-import os
+import os, re
 from typing import Optional
 
 from dotenv import find_dotenv, load_dotenv
@@ -128,6 +128,17 @@ async def out_command(update: Update, context: CallbackContext):
         # Handle the case where user data doesn't exist.
         await update.message.reply_text('Chat user data not found.')
 
+def escape_special_characters(text):
+    # Specify the set of characters to be escaped
+    special_characters = r'!"#$%&\'()*+,./:;=?@[\\]^_`{|}~'
+
+    # Create a regex pattern using the specified set of characters
+    pattern_string = '([' + re.escape(''.join(special_characters)) + '])'
+    pattern = re.compile(pattern_string)
+
+    # Insert \ before the specified set of characters
+    escaped_text = pattern.sub(r'\\\1', text)
+    return escaped_text
 
 async def tag_command(update: Update, context: CallbackContext):
     """Tag users who have agreed to be tagged in the group."""
@@ -145,7 +156,7 @@ async def tag_command(update: Update, context: CallbackContext):
 
         # Mention users without usernames using Markdown format
         mentioned_users = [
-            f"[{user['user_firstname']}](tg://user?id={user['user_id']})" for user in chat_user.users
+            f"[{escape_special_characters(user['user_firstname'])}](tg://user?id={user['user_id']})" for user in chat_user.users
         ]
 
         if mentioned_users:
@@ -299,7 +310,7 @@ async def mention_role(update, context):
 
         if role:
             if role.members:  # Check if the role has members
-                mentions = ', '.join([f"[{user.first_name}](tg://user?id={user.user_id})" for user in role.members])
+                mentions = ', '.join([f"[{escape_special_characters(user['user_firstname'])}](tg://user?id={user['user_id']})" for user in role.members])
                 await update.message.reply_text(f'{mentions}', parse_mode="MarkdownV2")
             else:
                 await update.message.reply_text(f'Role {role_name} has no members to mention.')
