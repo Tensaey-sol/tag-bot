@@ -310,7 +310,7 @@ async def mention_role(update, context):
 
         if role:
             if role.members:  # Check if the role has members
-                mentions = ', '.join([f"[{escape_special_characters(user['user_firstname'])}](tg://user?id={user['user_id']})" for user in role.members])
+                mentions = ', '.join([f"[{escape_special_characters(user['first_name'])}](tg://user?id={user['user_id']})" for user in role.members])
                 await update.message.reply_text(f'{mentions}', parse_mode="MarkdownV2")
             else:
                 await update.message.reply_text(f'Role {role_name} has no members to mention.')
